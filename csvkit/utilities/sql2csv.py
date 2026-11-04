@@ -33,6 +33,11 @@ class SQL2CSV(CSVKitUtility):
             '--query',
             help="The SQL query to execute. Overrides FILE and STDIN.")
         self.argparser.add_argument(
+            '-b', '--bind', dest='bind_params', action='append', default=[],
+            metavar='NAME=VALUE',
+            help='Bind parameter for parameterized queries. Specify as NAME=VALUE. '
+                 'Can be used multiple times. For example: -b p_last_name=Jones -b p_age=30')
+        self.argparser.add_argument(
             '-e', '--encoding', dest='encoding', default='utf-8',
             help='Specify the encoding of the input query file.')
         self.argparser.add_argument(
@@ -80,7 +85,23 @@ class SQL2CSV(CSVKitUtility):
 
             self.input_file.close()
 
-        rows = connection.execution_options(**parse_list(self.args.execution_option)).exec_driver_sql(query)
+        # Parse bind parameters if provided
+        bind_dict = {}
+        if self.args.bind_params:
+            for param in self.args.bind_params:
+                if '=' not in param:
+                    self.argparser.error(f"Invalid bind parameter format '{param}'. Expected NAME=VALUE.")
+                name, value = param.split('=', 1)
+                bind_dict[name.strip()] = value.strip()
+
+        # Execute with or without bind parameters
+        exec_opts = parse_list(self.args.execution_option)
+        if bind_dict:
+            # When using bind params, disable no_parameters option
+            exec_opts.pop('no_parameters', None)
+            rows = connection.execution_options(**exec_opts).exec_driver_sql(query, bind_dict)
+        else:
+            rows = connection.execution_options(**exec_opts).exec_driver_sql(query)
         output = agate.csv.writer(self.output_file, **self.writer_kwargs)
 
         if rows.returns_rows:
