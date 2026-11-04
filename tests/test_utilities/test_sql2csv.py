@@ -15,6 +15,8 @@ from csvkit.utilities.sql2csv import SQL2CSV, launch_new_instance
 from tests.utils import CSVKitTestCase, EmptyFileTests, stdin_as_string
 
 
+
+
 class TestSQL2CSV(CSVKitTestCase, EmptyFileTests):
     Utility = SQL2CSV
 
@@ -140,6 +142,38 @@ class TestSQL2CSV(CSVKitTestCase, EmptyFileTests):
 
         self.assertTrue('sepal_length,sepal_width,petal_length,petal_width,species' in csv)
         self.assertTrue('5.1,3.5,1.4,0.2,Iris-setosa' in csv)
+    def test_bind_single_param(self):
+        """Test single bind parameter with SQLite."""
+        csv = self.get_output(['--query', 'select :val as result', '-b', 'val=hello'])
+
+        self.assertIn('result', csv)
+        self.assertIn('hello', csv)
+
+    def test_bind_multiple_params(self):
+        """Test multiple bind parameters."""
+        csv = self.get_output([
+            '--query', 'select :x as col_x, :y as col_y',
+            '-b', 'x=alpha',
+            '-b', 'y=beta'
+        ])
+
+        self.assertIn('col_x', csv)
+        self.assertIn('col_y', csv)
+        self.assertIn('alpha', csv)
+        self.assertIn('beta', csv)
+
+    def test_bind_invalid_format(self):
+        """Test that invalid bind parameter format raises SystemExit."""
+        import sys
+        with self.assertRaises(SystemExit):
+            self.get_output(['--query', 'select 1', '-b', 'invalid_no_equals'])
+
+    def test_query_without_bind_still_works(self):
+        """Verify backward compatibility: queries without --bind still work."""
+        csv = self.get_output(['--query', 'select 6*9 as question'])
+
+        self.assertIn('question', csv)
+        self.assertIn('54', csv)
 
     # def test_wildcard_on_postgresql(self):
     #     db = postgresql_scheme + ':///dummy_test'
